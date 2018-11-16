@@ -2,67 +2,84 @@
 import re
 import scrapy
 from scrapy.linkextractors import LinkExtractor
+from scrapy.spiders import CrawlSpider, Rule
 import redis
 
-from heda.items import HedaItem
+from heda.items import ContentItem
+from utils.text_helper import clear_content
 
-class HddznetSpider(scrapy.Spider):
+class HddznetSpider(CrawlSpider):
 
-    BASE_DOMAIN_ = 'www.hddznet.com'
-    # PRODUCT_PATTERN_ = re.compile(r'product-.*.html$')
-    # PROGRAM_PATTERN_ = re.compile(r'program-.*.html$')
-    # NEWS_PATTERN_ = re.compile(r'news/.*.html$') 
+    __BASE_DOMAIN = 'www.hddznet.com'
 
     name = 'hddznet'
-    allowed_domains = [BASE_DOMAIN_]
+    allowed_domains = [ __BASE_DOMAIN ]
     start_urls = ['http://www.hddznet.com'] 
+    rules = (        
 
-    def __init__(self):
+        # 提取 产品中心
+        Rule(LinkExtractor(allow=(r'product-.*.html$')), follow=True, callback='parse_product'),
+
+        # 提取 方案与案例
+        Rule(LinkExtractor(allow=(r'program-.*.html$')), follow=True, callback='parse_program'),        
+
+        # 提取 经典案例
+        Rule(LinkExtractor(allow=(r'news/detail.*-jdal.html$')), follow=True, callback='parse_case'),
+
+        # 提取 新闻中心
+        Rule(LinkExtractor(allow=(r'news/detail.*-xwzx.html$')), follow=True, callback='parse_news'),
+
+        # # 提取 图片 .png .jpg .jpeg .bmp
+        # Rule(LinkExtractor(allow=(r'www.hddznet.com'), deny_extensions=set(), tags=('img'), attrs=('src'), canonicalize=True, unique=True), \
+        #     follow=False, callback='parse_images')
+
+        # 提取 所有链接
+        Rule(LinkExtractor(allow=(r'.*')), follow=True),        
+    )
+
+    def __init__(self, *args, **kwargs):
+        super(HddznetSpider, self).__init__(*args, **kwargs)
         pool = redis.ConnectionPool(host='128.1.6.45', port=6379, decode_responses=True)
-        self.redis = redis.Redis(connection_pool=pool)
+        self.redis = redis.Redis(connection_pool=pool) 
 
-    def parse(self, response):
+    def __parse(self, response, parse_name, title_class, content_class):
+        cache_key = 'uri:url:{0}'.format(response.url)
+        if self.redis.exists(cache_key):
+            print('xx> SKIP', self.name, response.url, parse_name)
+            return None
+
+        title = self.__extract_title(response, '//div[@class="{0}"]/text()'.format(title_class))
+        print('==>', self.name, response.url, parse_name, title)
+                
+        elements = response.xpath('//div[@class="{0}"]//span|//div[@class="{0}"]//p|//div[@class="{0}"]//td'.format(content_class))
+        contents = elements.xpath('text()').extract()
+        content = clear_content(contents)
         
-        print('==>', response.url)
-
-        title = response.xpath('//div[@class="current-menu"]/text()').extract_first()        
-
-        item = HedaItem()
-        item['title'] = title.strip() if title is not None else ''
+        item = ContentItem()
+        item['company'] = self.name
+        item['title'] = title
         item['url'] = response.url
-        item['company'] = 'heda'
+        item['content'] = content
 
-        spans = response.xpath('//div[@class="content"]//span/text()').extract()
-        ps = response.xpath('//div[@class="content"]//p/text()').extract()
-        lnks = response.xpath('//div[@class="content"]//a/text()').extract()
-        tds = response.xpath('//div[@class="content"]//td/text()').extract()
-        item['contents'] = spans + ps + lnks + tds
-        # print(spans)        
-
-        yield item
-
-        link_extractor = LinkExtractor(allow = r'.*')
-        links = link_extractor.extract_links(response)
-		
-        for lnk in links:
-            # URL should in base domain
-            if self.BASE_DOMAIN_ not in lnk.url: 
-                continue
-
-            # match = self.PRODUCT_PATTERN_.search(lnk.url) is not None or \
-            #         self.PROGRAM_PATTERN_.search(lnk.url) is not None or \
-            #         self.NEWS_DETAIL_PATTERN_.search(lnk.url) is not None
-                              
-            # if not match: continue
-
-            # each URL should only crawl once 
-            key = 'uri:url:{0}'.format(lnk.url)
-            if self.redis.exists(key): 
-                continue
-
-            yield scrapy.Request(lnk.url, callback=self.parse) 
-
-            self.redis.set(key, lnk.url)        
-    
-
+        return item
+ 
+    def parse_product(self, response):
+        yield self.__parse(response, '产品中心', 'current-menu', 'right')
         
+    def parse_program(self, response):
+        yield self.__parse(response, '方案与案例', 'current-menu', 'right')     
+
+    def parse_case(self, response):
+        yield self.__parse(response, '经典案例', 'detail-title', 'detail-content')
+
+    def parse_news(self, response):
+        yield self.__parse(response, '新闻中心', 'detail-title', 'detail-content')
+
+    # def parse_images(self, response):
+    #     print('==>', self.name, '-Images-' , response.url)
+
+    def __extract_title(self, response, xpath=None):        
+        if xpath is None:
+            return ''
+        title = response.xpath(xpath).extract_first()
+        return title.strip() if title is not None else ''

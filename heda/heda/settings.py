@@ -68,9 +68,10 @@ ROBOTSTXT_OBEY = True
 # Configure item pipelines
 # See https://doc.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-   'heda.pipelines.HedaSegmentPipeline': 100,
-   'heda.pipelines.HedaArticlePipeline': 110,
-   'heda.pipelines.HedaInvertedIndexPipeline': 120,
+   'pipelines.WordSegmentPipeline.WordSegmentPipeline': 100,
+   'pipelines.ESArticleWriterPipeline.ESArticleWriterPipeline': 200,
+   'pipelines.ESWordWriterPipeline.ESWordWriterPipeline': 300,
+   'pipelines.UrlCachePipeline.UrlCachePipeline': 400,   
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
@@ -88,8 +89,8 @@ ITEM_PIPELINES = {
 
 # Enable and configure HTTP caching (disabled by default)
 # See https://doc.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-#HTTPCACHE_ENABLED = True
-#HTTPCACHE_EXPIRATION_SECS = 0
-#HTTPCACHE_DIR = 'httpcache'
-#HTTPCACHE_IGNORE_HTTP_CODES = []
-#HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'
+HTTPCACHE_ENABLED = True
+HTTPCACHE_EXPIRATION_SECS = 600
+HTTPCACHE_DIR = 'httpcache'
+HTTPCACHE_IGNORE_HTTP_CODES = []
+HTTPCACHE_STORAGE = 'scrapy.extensions.httpcache.FilesystemCacheStorage'

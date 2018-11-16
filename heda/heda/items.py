@@ -8,11 +8,10 @@
 import scrapy
 
 
-class HedaItem(scrapy.Item):   
+class ContentItem(scrapy.Item):   
     title = scrapy.Field()
     url = scrapy.Field()
-    contents = scrapy.Field()
-    words = scrapy.Field()
-    article_content = scrapy.Field()
-    article_id = scrapy.Field()
+    content = scrapy.Field()
     company = scrapy.Field()
+    words = scrapy.Field()
+    article_id = scrapy.Field()
